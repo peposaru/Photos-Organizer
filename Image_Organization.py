@@ -5,7 +5,7 @@ import PIL.Image,time
 import os, datetime, re, calendar, shutil
 from PIL import Image, ExifTags
 from PIL.ExifTags import TAGS
-
+from tqdm import tqdm
 
 class FolderManager:
     # Check if this is a valid directory / give stats of directory
@@ -48,20 +48,17 @@ class DirectoryManager:
     def validFilesOrg(self,inputDir):
         validFilesList   = []
 
-        for subdir, dirs, files in os.walk(inputDir):
+        for subdir, dirs, files in tqdm(os.walk(inputDir), desc='VALIDATING FILES...'):
             for file in files:
                 try: 
                     Image.open(os.path.join(subdir, file))
                     validFilesList += [(os.path.join(subdir, file))]
                 except:
                     pass
-        return validFilesList
-    def processingFolder(self,inputDir):
-        try:
-            os.makedirs('Output Folder')
-        except:
-            pass
-        return
+        return validFilesList 
+    def processingFolder(self):
+            os.makedirs('Output Folder',exist_ok=True)
+            print('OUTPUT FOLDER CREATED...')
     def dateExtractor(self,file):
         dateRegex = re.compile(r"([1-2][0-9][0-9][0-9]):([0-1][0-9]):([0-3][0-9])")
         try:
@@ -76,35 +73,33 @@ class DirectoryManager:
             monthDate  = calendar.month_name[int(monthDate)]
             dayDate    = mo.group(3)
             return monthDate,yearDate
+        
         except Exception as err:
-            print (err)
+            print (f'ERROR WHILE EXTRACTING DATE ON FILE : {file}\n ERROR : {err}')
             pass
+        return None, None
     def fileDateDirMkr(self,validFilesList,inputDir):
-        yearFolder  = 0
-        monthFolder = 0
+        yearFolderCount  = set()
+        monthFolderCount = set()
+
         for file in validFilesList:
-            try:
                 monthDate,yearDate = self.dateExtractor(file)
-            except Exception as err:
-                print(err)
-                continue
+                if not monthDate or not yearDate:
+                    continue
+                
+                yearFolder = os.path.join(inputDir,yearDate)
+                monthFolder = os.path.join(yearFolder,monthDate)
 
-            try:
-                os.mkdir(f'{yearDate}')
-                yearFolder += 1
-            except:
-                pass
+                os.makedirs(yearFolder, exist_ok=True)
+                yearFolderCount.add(yearFolder)
 
-            try:
-                os.mkdir(f'{inputDir}/{yearDate}/{monthDate}')
-                monthFolder += 1
-            except Exception as err:
-                pass
+                os.makedirs(monthFolder,exist_ok=True)
+                monthFolderCount.add(monthFolder)
 
         print (
 f"""
-YEAR FOLDER(S) MADE                : {yearFolder}
-MONTH FOLDER(S) MADE               : {monthFolder}
+YEAR FOLDER(S) MADE                : {len(yearFolderCount)}
+MONTH FOLDER(S) MADE               : {len(monthFolderCount)}
 """)
         
 class FileLocationManager:
@@ -113,30 +108,31 @@ class FileLocationManager:
         self.dirMgr   = dirMgr
 
     def photoToFolder(self,validFilesList,inputDir,dirMgr):
-        for file in validFilesList:
-            try:
-                monthDate,yearDate = dirMgr.dateExtractor(file)
-            except Exception as err:
-                print(err)
+        for file in tqdm(validFilesList, desc='MOVING FILES TO FOLDERS...'):
+            monthDate,yearDate = dirMgr.dateExtractor(file)
+            if not monthDate or not yearDate:
                 continue
 
+            sourceFile = f'{file}'
+            destinationDir = os.path.join(inputDir, yearDate, monthDate)
+
             try:
-                sourceFile = f'{file}'
-                destinationDir = (f'{inputDir}/{yearDate}/{monthDate}')
                 shutil.move(sourceFile, destinationDir)
             except Exception as err:
-                print(err)
+                print(f' ERROR MOVING {file} TO {destinationDir} : {err}')
 
+    
 def main():
-
+    
     #inputDir = input("INPUT DIRECTORY FOR PROCESSING... \n")
-    inputDir = r'C:\OutputFolder'
+    inputDir = r'C:\Users\keena\Desktop\Photos Processing\Test Files'
     os.chdir(inputDir)
 
     folderMgr  = FolderManager(inputDir)
     dirMgr     = DirectoryManager(inputDir)
     fileDirMgr = FileLocationManager(inputDir,dirMgr)
 
+    print('INITIALIZING... PLEASE WAIT...')
     while True:
 
         # Check validity of directory
@@ -158,13 +154,9 @@ def main():
 
         # Put files in correct locations
         fileDirMgr.photoToFolder(validFilesList,inputDir,dirMgr)
-
+        break
 # CHECK FOR DUPLICATE PHOTOGRAPHS
 
-        break
 
-
-
-
-
-main()
+if __name__ == "__main__":
+    main()
